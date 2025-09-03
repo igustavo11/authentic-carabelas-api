@@ -1,0 +1,26 @@
+version: "3.9"
+services:
+  mongo:
+    image: mongo:6
+    restart: always
+    ports:
+      - "27019:27019"
+    volumes:
+      - mongo_data:/data/db
+
+  api:
+    build: .
+    restart: always
+    ports:
+      - "3335:3335"
+    environment:
+      - DATABASE_URL=mongodb://admin:secret@mongo:27019/ecommerce?authSource=admin
+      - JWT_SECRET=chave-super-secreta
+      - CLOUDINARY_CLOUD_NAME=seu_cloud_name
+      - CLOUDINARY_API_KEY=seu_api_key
+      - CLOUDINARY_API_SECRET=seu_api_secret
+    depends_on:
+      - mongo
+
+volumes:
+  mongo_data:
