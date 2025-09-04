@@ -23,7 +23,10 @@ export const authPlugin = new Elysia()
   );
 
 export const authService = {
-  async login(data: LoginData, jwt: any) {
+  async login(data: LoginData, jwt: any): Promise<
+    | { success: false; message: string }
+    | { success: true; token: string; user: { id: string; email: string; role: string } }
+  > {
     const user = await prisma.user.findUnique({
       where: {
         email: data.email
