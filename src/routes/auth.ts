@@ -1,38 +1,41 @@
-import {Elysia, t} from "elysia";
-import {authPlugin, authService} from "../utils/auth";
+import { Elysia } from "elysia";
+import { authPlugin } from "../utils/auth";
+import { AuthController } from "../controllers/auth.controller";
+import { registerSchema, loginSchema, profileSchema } from "../schemas/auth.schemas";
 
 export const authRoutes = (app: Elysia) => 
     app
     .use(authPlugin)
-    .post("/admin/login", async ({ body, jwt, set }) => {
-        const result = await authService.login(body, jwt);
-        
-        if (!result.success) {
-            set.status = result.message === "User not found" ? 404 : 401;
-            return { message: result.message };
+    .post("/register", 
+        ({ body, set }) => AuthController.register(body, set), 
+        {
+            ...registerSchema,
+            detail: {
+                tags: ["Auth"],
+                summary: "Register user",
+                description: "Create a new user account"
+            }
         }
-
-        return {
-            message: "Login successful",
-            token: result.token,
-            user: result.user
-        };
-    }, {
-        body: t.Object({
-            email: t.String(),
-            password: t.String(),
-        })
-    })
-    .get("/admin/profile", async ({ jwt, headers, set }) => {
-        const user = await authService.verifyToken(headers.authorization, jwt);
-        
-        if (!user) {
-            set.status = 401;
-            return { message: "Invalid or expired token" };
+    )
+    .post("/admin/login", 
+        ({ body, jwt, set }) => AuthController.login(body, jwt, set), 
+        {
+            ...loginSchema,
+            detail: {
+                tags: ["Auth"],
+                summary: "Admin login",
+                description: "Authenticate admin user and receive JWT token"
+            }
         }
-
-        return {
-            message: "Profile data",
-            user
-        };
-    })
+    )
+    .get("/admin/profile", 
+        ({ jwt, headers, set }) => AuthController.profile(jwt, headers, set), 
+        {
+            ...profileSchema,
+            detail: {
+                tags: ["Auth"],
+                summary: "Get admin profile",
+                description: "Get authenticated admin user profile data"
+            }
+        }
+    );

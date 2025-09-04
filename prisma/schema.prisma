@@ -23,7 +23,7 @@ model Product{
   name String
   price Float
   description String
-  imageUrl String
+  imageUrl String?
   category String
   sizes String[]
   stock Int
@@ -32,16 +32,8 @@ model Product{
 model Order {
   id        String       @id @default(auto()) @map("_id") @db.ObjectId
   email     String
-  items     OrderItem[]
+  items     String // JSON string containing order items
   total     Float
   status    String   @default("pending")
   createdAt DateTime @default(now())
-}
-
-model OrderItem {
-  id        String  @id @default(auto()) @map("_id") @db.ObjectId
-  productId String  @db.ObjectId
-  quantity  Int
-  orderId   String  @db.ObjectId
-  order     Order   @relation(fields: [orderId], references: [id])
 }
