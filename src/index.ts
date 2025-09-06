@@ -3,6 +3,7 @@ import { swaggerConfig } from "./config/swagger";
 import { authRoutes } from "./routes/auth";
 import { productsRoutes } from "./routes/products";
 import { uploadRoutes } from "./routes/upload";
+import { ordersRoutes } from "./routes/oders";
 
 const app = new Elysia()
 .use(swaggerConfig)
@@ -14,6 +15,7 @@ const app = new Elysia()
 .use(authRoutes)
 .use(productsRoutes)
 .use(uploadRoutes)
+.use(ordersRoutes)
 .listen(3335);
 
 console.log("Server running at http://localhost:3335");

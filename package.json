@@ -6,6 +6,15 @@
   "devDependencies": {
     "@types/bun": "latest"
   },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "test": "node test/run-all-tests.js",
+    "test:quick": "node test/quick-test.js",
+    "test:api": "node test/api-test.js",
+    "test:inventory": "node test/inventory-test.js",
+    "test:whatsapp": "node test/whatsapp-test.js"
+  },
   "peerDependencies": {
     "typescript": "^5"
   },

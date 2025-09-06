@@ -33,10 +33,14 @@ model Product{
 }
 
 model Order {
-  id        String       @id @default(auto()) @map("_id") @db.ObjectId
-  email     String
-  items     String // JSON string containing order items
-  total     Float
-  status    String   @default("pending")
-  createdAt DateTime @default(now())
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber     String   @unique
+  customerName    String
+  customerPhone   String
+  items           String   // JSON string containing order items
+  total           Float
+  status          String   @default("pending")
+  whatsappMessage String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
