@@ -22,30 +22,32 @@ export class WhatsAppService {
     static generateOrderMessage(orderData: OrderData): string {
         const { orderNumber, customerName, customerPhone, items, total } = orderData;
         
-        let message = `🛍️ *NOVO PEDIDO - ${orderNumber}*\n\n`;
+        let message = `Olá!\n\n`;
+        message += `Gostaria de fazer uma encomenda dos seguintes produtos:\n\n`;
         
-        // Informações do cliente
-        message += `👤 *Cliente:* ${customerName}\n`;
-        message += `📱 *Telefone:* ${customerPhone}\n\n`;
-        
-        // Itens do pedido
-        message += `📦 *Itens do Pedido:*\n`;
+        // Itens do pedido de forma mais natural
         items.forEach((item, index) => {
             message += `${index + 1}. *${item.productName}*\n`;
-            message += `   💰 Preço: R$ ${item.price.toFixed(2)}\n`;
-            message += `   📏 Quantidade: ${item.quantity}\n`;
             if (item.size) {
-                message += `   📐 Tamanho: ${item.size}\n`;
+                message += `   Tamanho: ${item.size}\n`;
             }
-            message += `   💵 Subtotal: R$ ${(item.price * item.quantity).toFixed(2)}\n\n`;
+            message += `   Quantidade: ${item.quantity}x\n`;
+            message += `   Valor unitário: R$ ${item.price.toFixed(2)}\n`;
+            message += `   Subtotal: R$ ${(item.price * item.quantity).toFixed(2)}\n\n`;
         });
         
-        // Total
-        message += `💰 *TOTAL DO PEDIDO: R$ ${total.toFixed(2)}*\n\n`;
+        // Total de forma mais natural
+        message += `*Total do pedido: R$ ${total.toFixed(2)}*\n\n`;
         
-        // Informações de contato
-        message += `📞 *Para confirmar o pedido, entre em contato conosco!*\n`;
-        message += `🕒 *Horário de atendimento: Segunda a Sexta, 9h às 18h*`;
+        // Informações do cliente
+        message += `*Meus dados:*\n`;
+        message += `Nome: ${customerName}\n`;
+        message += `Telefone: ${customerPhone}\n\n`;
+        
+        // Pedido de confirmação mais natural
+        message += `Poderia me confirmar a disponibilidade e as formas de pagamento?\n\n`;
+        message += `Aguardo sua resposta!\n\n`;
+        message += `_Pedido #${orderNumber}_`;
         
         return message;
     }
@@ -138,11 +140,18 @@ export class WhatsAppService {
     }
     
     /**
+     * Codifica mensagem para URL
+     */
+    private static encodeWhatsAppMessage(message: string): string {
+        return encodeURIComponent(message);
+    }
+
+    /**
      * Gera link do WhatsApp para envio da mensagem
      */
     static generateWhatsAppLink(phone: string, message: string): string {
         const formattedPhone = this.formatPhoneNumber(phone);
-        const encodedMessage = encodeURIComponent(message);
+        const encodedMessage = this.encodeWhatsAppMessage(message);
         return `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
     }
 
@@ -155,7 +164,7 @@ export class WhatsAppService {
             throw new Error('WHATSAPP_ADM não configurado nas variáveis de ambiente');
         }
         const formattedPhone = this.formatPhoneNumber(adminPhone);
-        const encodedMessage = encodeURIComponent(message);
+        const encodedMessage = this.encodeWhatsAppMessage(message);
         return `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
     }
 }

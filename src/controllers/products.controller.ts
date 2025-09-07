@@ -5,22 +5,46 @@ import { CloudinaryService } from "../utils/cloudnairy";
 export class ProductsController {
     static async listProducts(query: any, set: any) {
         try {
-            const where: any = {};
+            // Construir filtro MongoDB
+            const filter: any = {};
 
             if (query?.category) {
-                where.category = query.category;
+                filter.category = query.category;
             }
 
             if (query?.search) {
-                where.OR = [
-                    { name: { contains: query.search, mode: "insensitive" } },
-                    { description: { contains: query.search, mode: "insensitive" } }
+                filter.$or = [
+                    { name: { $regex: query.search, $options: "i" } },
+                    { description: { $regex: query.search, $options: "i" } }
                 ];
             }
 
-            const products = await prisma.product.findMany({ where });
-            return { products };
+            // Usar raw command para buscar produtos
+            const result = await prisma.$runCommandRaw({
+                find: "products",
+                filter: filter
+            });
+
+            const products = (result as any).cursor?.firstBatch || [];
+            
+            // Converter ObjectIds para strings
+            const formattedProducts = products.map((product: any) => ({
+                id: product._id?.$oid || product._id?.toString() || String(product._id),
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                imageUrl: product.imageUrl,
+                images: product.images || [],
+                category: product.category,
+                sizes: product.sizes || [],
+                stock: product.stock,
+                createdAt: product.createdAt,
+                updatedAt: product.updatedAt
+            }));
+
+            return { products: formattedProducts };
         } catch (error) {
+            console.error('Erro ao listar produtos:', error);
             set.status = 500;
             return { message: "Failed to list products" };
         }
@@ -28,13 +52,42 @@ export class ProductsController {
 
     static async getProduct(params: any, set: any) {
         try {
-            const product = await prisma.product.findUnique({ where: { id: params.id } });
-            if (!product) {
+            // Usar raw command para buscar produto por ID
+            const result = await prisma.$runCommandRaw({
+                find: "products",
+                filter: { 
+                    _id: { $oid: params.id }
+                },
+                limit: 1
+            });
+
+            const products = (result as any).cursor?.firstBatch || [];
+            
+            if (products.length === 0) {
                 set.status = 404;
                 return { message: "Product not found" };
             }
-            return { product };
+
+            const product = products[0];
+            
+            // Formatar produto
+            const formattedProduct = {
+                id: product._id?.$oid || product._id?.toString() || String(product._id),
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                imageUrl: product.imageUrl,
+                images: product.images || [],
+                category: product.category,
+                sizes: product.sizes || [],
+                stock: product.stock,
+                createdAt: product.createdAt,
+                updatedAt: product.updatedAt
+            };
+
+            return { product: formattedProduct };
         } catch (error) {
+            console.error('Erro ao buscar produto:', error);
             set.status = 500;
             return { message: "Failed to fetch product" };
         }
@@ -47,9 +100,32 @@ export class ProductsController {
             return { message: "Unauthorized" };
         }
         try {
-            const products = await prisma.product.findMany();
-            return { products };
+            // Usar raw command para buscar todos os produtos
+            const result = await prisma.$runCommandRaw({
+                find: "products",
+                filter: {}
+            });
+
+            const products = (result as any).cursor?.firstBatch || [];
+            
+            // Converter ObjectIds para strings
+            const formattedProducts = products.map((product: any) => ({
+                id: product._id?.$oid || product._id?.toString() || String(product._id),
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                imageUrl: product.imageUrl,
+                images: product.images || [],
+                category: product.category,
+                sizes: product.sizes || [],
+                stock: product.stock,
+                createdAt: product.createdAt,
+                updatedAt: product.updatedAt
+            }));
+
+            return { products: formattedProducts };
         } catch (error) {
+            console.error('Erro ao listar produtos (admin):', error);
             set.status = 500;
             return { message: "Failed to list products" };
         }
@@ -96,8 +172,9 @@ export class ProductsController {
             }
 
             // Criar produto usando operação raw do MongoDB (sem transações)
+            // Usando "products" (plural) que é o nome correto da collection
             const insertResult = await prisma.$runCommandRaw({
-                insert: "Product",
+                insert: "products",  // ← CORRIGIDO: era "Product", agora é "products"
                 documents: [{
                     name: body.name,
                     price: price,
@@ -118,8 +195,9 @@ export class ProductsController {
             }
 
             // Buscar o produto criado usando operação raw
+            // Usando "products" (plural) que é o nome correto da collection
             const productResult = await prisma.$runCommandRaw({
-                find: "Product",
+                find: "products",  // ← CORRIGIDO: era "Product", agora é "products"
                 filter: { 
                     name: body.name,
                     category: body.category 

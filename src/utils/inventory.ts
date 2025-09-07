@@ -19,15 +19,23 @@ export class InventoryService {
         try {
             for (const item of orderItems) {
                 try {
-                    // Buscar o produto atual
-                    const product = await prisma.product.findUnique({
-                        where: { id: item.productId }
+                    // Buscar o produto atual usando raw command
+                    const result = await prisma.$runCommandRaw({
+                        find: "products",
+                        filter: { 
+                            _id: { $oid: item.productId }
+                        },
+                        limit: 1
                     });
 
-                    if (!product) {
+                    const products = (result as any).cursor?.firstBatch || [];
+                    
+                    if (products.length === 0) {
                         errors.push(`Produto ${item.productName} (ID: ${item.productId}) não encontrado`);
                         continue;
                     }
+
+                    const product = products[0];
 
                     // Verificar se há estoque suficiente
                     if (product.stock < item.quantity) {
@@ -35,17 +43,22 @@ export class InventoryService {
                         continue;
                     }
 
-                    // Reduzir o estoque
-                    await prisma.product.update({
-                        where: { id: item.productId },
-                        data: {
-                            stock: {
-                                decrement: item.quantity
+                    // Reduzir o estoque usando raw command
+                    const newStock = product.stock - item.quantity;
+                    await prisma.$runCommandRaw({
+                        update: "products",
+                        updates: [{
+                            q: { _id: { $oid: item.productId } },
+                            u: { 
+                                $set: { 
+                                    stock: newStock,
+                                    updatedAt: new Date()
+                                }
                             }
-                        }
+                        }]
                     });
 
-                    console.log(`Estoque reduzido para ${item.productName}: ${product.stock} -> ${product.stock - item.quantity}`);
+                    console.log(`Estoque reduzido para ${item.productName}: ${product.stock} -> ${newStock}`);
                 } catch (error) {
                     console.error(`Erro ao reduzir estoque do produto ${item.productName}:`, error);
                     errors.push(`Erro ao reduzir estoque de ${item.productName}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
@@ -74,27 +87,40 @@ export class InventoryService {
         try {
             for (const item of orderItems) {
                 try {
-                    // Buscar o produto atual
-                    const product = await prisma.product.findUnique({
-                        where: { id: item.productId }
+                    // Buscar o produto atual usando raw command
+                    const result = await prisma.$runCommandRaw({
+                        find: "products",
+                        filter: { 
+                            _id: { $oid: item.productId }
+                        },
+                        limit: 1
                     });
 
-                    if (!product) {
+                    const products = (result as any).cursor?.firstBatch || [];
+                    
+                    if (products.length === 0) {
                         errors.push(`Produto ${item.productName} (ID: ${item.productId}) não encontrado`);
                         continue;
                     }
 
-                    // Restaurar o estoque
-                    await prisma.product.update({
-                        where: { id: item.productId },
-                        data: {
-                            stock: {
-                                increment: item.quantity
+                    const product = products[0];
+
+                    // Restaurar o estoque usando raw command
+                    const newStock = product.stock + item.quantity;
+                    await prisma.$runCommandRaw({
+                        update: "products",
+                        updates: [{
+                            q: { _id: { $oid: item.productId } },
+                            u: { 
+                                $set: { 
+                                    stock: newStock,
+                                    updatedAt: new Date()
+                                }
                             }
-                        }
+                        }]
                     });
 
-                    console.log(`Estoque restaurado para ${item.productName}: ${product.stock} -> ${product.stock + item.quantity}`);
+                    console.log(`Estoque restaurado para ${item.productName}: ${product.stock} -> ${newStock}`);
                 } catch (error) {
                     console.error(`Erro ao restaurar estoque do produto ${item.productName}:`, error);
                     errors.push(`Erro ao restaurar estoque de ${item.productName}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
@@ -122,17 +148,31 @@ export class InventoryService {
         
         try {
             for (const item of orderItems) {
-                const product = await prisma.product.findUnique({
-                    where: { id: item.productId }
-                });
+                try {
+                    // Usar raw command para buscar produto por ID
+                    const result = await prisma.$runCommandRaw({
+                        find: "products",
+                        filter: { 
+                            _id: { $oid: item.productId }
+                        },
+                        limit: 1
+                    });
 
-                if (!product) {
-                    errors.push(`Produto ${item.productName} (ID: ${item.productId}) não encontrado`);
-                    continue;
-                }
+                    const products = (result as any).cursor?.firstBatch || [];
+                    
+                    if (products.length === 0) {
+                        errors.push(`Produto ${item.productName} (ID: ${item.productId}) não encontrado`);
+                        continue;
+                    }
 
-                if (product.stock < item.quantity) {
-                    errors.push(`Estoque insuficiente para ${item.productName}. Disponível: ${product.stock}, Solicitado: ${item.quantity}`);
+                    const product = products[0];
+
+                    if (product.stock < item.quantity) {
+                        errors.push(`Estoque insuficiente para ${item.productName}. Disponível: ${product.stock}, Solicitado: ${item.quantity}`);
+                    }
+                } catch (itemError) {
+                    console.error(`Erro ao verificar produto ${item.productId}:`, itemError);
+                    errors.push(`Erro ao verificar produto ${item.productName}: ${itemError instanceof Error ? itemError.message : 'Erro desconhecido'}`);
                 }
             }
 
@@ -154,12 +194,23 @@ export class InventoryService {
      */
     static async getProductStock(productId: string): Promise<number | null> {
         try {
-            const product = await prisma.product.findUnique({
-                where: { id: productId },
-                select: { stock: true }
+            // Usar raw command para buscar estoque do produto
+            const result = await prisma.$runCommandRaw({
+                find: "products",
+                filter: { 
+                    _id: { $oid: productId }
+                },
+                projection: { stock: 1 },
+                limit: 1
             });
 
-            return product?.stock ?? null;
+            const products = (result as any).cursor?.firstBatch || [];
+            
+            if (products.length === 0) {
+                return null;
+            }
+
+            return products[0].stock ?? null;
         } catch (error) {
             console.error('Erro ao obter estoque do produto:', error);
             return null;

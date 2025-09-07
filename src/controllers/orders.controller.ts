@@ -33,18 +33,46 @@ export class OrdersController {
             // Gerar mensagem do WhatsApp
             const whatsappMessage = WhatsAppService.generateOrderMessage(orderData);
             
-            // Criar pedido no banco de dados
-            const order = await prisma.order.create({
-                data: {
+            // Criar pedido no banco de dados usando raw command
+            const insertResult = await prisma.$runCommandRaw({
+                insert: "orders",
+                documents: [{
                     orderNumber,
                     customerName: body.customerName,
                     customerPhone: body.customerPhone,
                     items: JSON.stringify(body.items),
                     total: body.total,
                     status: 'pending',
-                    whatsappMessage
-                }
+                    whatsappMessage,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                }]
             });
+
+            if (!insertResult.ok || insertResult.n === 0) {
+                set.status = 500;
+                return { message: "Erro ao criar pedido" };
+            }
+
+            // Buscar o pedido criado
+            const orderResult = await prisma.$runCommandRaw({
+                find: "orders",
+                filter: { 
+                    orderNumber: orderNumber
+                },
+                limit: 1,
+                sort: { _id: -1 }
+            });
+
+            if (!(orderResult as any).cursor?.firstBatch?.length) {
+                set.status = 500;
+                return { message: "Erro ao recuperar pedido criado" };
+            }
+
+            const order = (orderResult as any).cursor.firstBatch[0];
+            
+            // Converter ObjectId para string
+            const orderId = order._id?.$oid || order._id?.toString() || String(order._id);
             
             // Gerar link do WhatsApp do admin para receber o pedido
             const whatsappLink = WhatsAppService.generateAdminWhatsAppLink(order.whatsappMessage || '');
@@ -53,7 +81,7 @@ export class OrdersController {
             return {
                 message: "Pedido criado com sucesso!",
                 order: {
-                    id: order.id,
+                    id: orderId,
                     orderNumber: order.orderNumber,
                     customerName: order.customerName,
                     customerPhone: order.customerPhone,
@@ -77,19 +105,37 @@ export class OrdersController {
      */
     static async getOrder(params: any, set: any) {
         try {
-            const order = await prisma.order.findUnique({
-                where: { id: params.id }
+            // Usar raw command para buscar pedido por ID
+            const result = await prisma.$runCommandRaw({
+                find: "orders",
+                filter: { 
+                    _id: { $oid: params.id }
+                },
+                limit: 1
             });
+
+            const orders = (result as any).cursor?.firstBatch || [];
             
-            if (!order) {
+            if (orders.length === 0) {
                 set.status = 404;
                 return { message: "Pedido não encontrado" };
             }
+
+            const order = orders[0];
             
             return { 
                 order: {
-                    ...order,
-                    items: JSON.parse(order.items)
+                    id: order._id?.$oid || order._id?.toString() || String(order._id),
+                    orderNumber: order.orderNumber,
+                    customerName: order.customerName,
+                    customerPhone: order.customerPhone,
+                    items: JSON.parse(order.items),
+                    total: order.total,
+                    status: order.status,
+                    whatsappMessage: order.whatsappMessage,
+                    whatsappLink: order.whatsappLink,
+                    createdAt: order.createdAt,
+                    updatedAt: order.updatedAt
                 }
             };
         } catch (error) {
@@ -108,35 +154,53 @@ export class OrdersController {
             const limit = parseInt(query.limit) || 10;
             const skip = (page - 1) * limit;
             
-            const where: any = {};
+            // Construir filtro MongoDB
+            const filter: any = {};
             if (query.status) {
-                where.status = query.status;
+                filter.status = query.status;
             }
             
-            const [orders, total] = await Promise.all([
-                prisma.order.findMany({
-                    where,
-                    skip,
-                    take: limit,
-                    orderBy: { createdAt: 'desc' },
-                    select: {
-                        id: true,
-                        orderNumber: true,
-                        customerName: true,
-                        customerPhone: true,
-                        total: true,
-                        status: true,
-                        createdAt: true
-                    }
-                }),
-                prisma.order.count({ where })
-            ]);
+            // Buscar pedidos com paginação usando raw command
+            const ordersResult = await prisma.$runCommandRaw({
+                find: "orders",
+                filter: filter,
+                projection: {
+                    orderNumber: 1,
+                    customerName: 1,
+                    customerPhone: 1,
+                    total: 1,
+                    status: 1,
+                    createdAt: 1
+                },
+                sort: { createdAt: -1 },
+                skip: skip,
+                limit: limit
+            });
+
+            // Contar total de pedidos
+            const countResult = await prisma.$runCommandRaw({
+                count: "orders",
+                query: filter
+            });
             
+            const orders = (ordersResult as any).cursor?.firstBatch || [];
+            const total = (countResult as any).n || 0;
             const totalPages = Math.ceil(total / limit);
+            
+            // Formatar pedidos
+            const formattedOrders = orders.map((order: any) => ({
+                id: order._id?.$oid || order._id?.toString() || String(order._id),
+                orderNumber: order.orderNumber,
+                customerName: order.customerName,
+                customerPhone: order.customerPhone,
+                total: order.total,
+                status: order.status,
+                createdAt: order.createdAt
+            }));
             
             set.status = 200;
             return {
-                orders,
+                orders: formattedOrders,
                 pagination: {
                     page,
                     limit,
@@ -165,15 +229,23 @@ export class OrdersController {
      */
     static async updateOrderStatus(params: any, body: any, set: any) {
         try {
-            const order = await prisma.order.findUnique({
-                where: { id: params.id }
+            // Buscar pedido usando raw command
+            const result = await prisma.$runCommandRaw({
+                find: "orders",
+                filter: { 
+                    _id: { $oid: params.id }
+                },
+                limit: 1
             });
+
+            const orders = (result as any).cursor?.firstBatch || [];
             
-            if (!order) {
+            if (orders.length === 0) {
                 set.status = 404;
                 return { message: "Pedido não encontrado" };
             }
-            
+
+            const order = orders[0];
             const oldStatus = order.status;
             const newStatus = body.status;
             
@@ -200,12 +272,18 @@ export class OrdersController {
                 }
             }
             
-            const updatedOrder = await prisma.order.update({
-                where: { id: params.id },
-                data: { 
-                    status: newStatus,
-                    updatedAt: new Date()
-                }
+            // Atualizar status usando raw command
+            await prisma.$runCommandRaw({
+                update: "orders",
+                updates: [{
+                    q: { _id: { $oid: params.id } },
+                    u: { 
+                        $set: { 
+                            status: newStatus,
+                            updatedAt: new Date()
+                        }
+                    }
+                }]
             });
             
             // Gerar mensagem de atualização de status
@@ -226,9 +304,9 @@ export class OrdersController {
             const response: any = {
                 message: "Status do pedido atualizado com sucesso!",
                 order: {
-                    id: updatedOrder.id,
-                    orderNumber: updatedOrder.orderNumber,
-                    status: updatedOrder.status
+                    id: order._id?.$oid || order._id?.toString() || String(order._id),
+                    orderNumber: order.orderNumber,
+                    status: newStatus
                 },
                 whatsappMessage: statusUpdateMessage,
                 whatsappLink: whatsappLink
@@ -252,14 +330,23 @@ export class OrdersController {
      */
     static async getWhatsAppLink(params: any, set: any) {
         try {
-            const order = await prisma.order.findUnique({
-                where: { id: params.id }
+            // Usar raw command para buscar pedido por ID
+            const result = await prisma.$runCommandRaw({
+                find: "orders",
+                filter: { 
+                    _id: { $oid: params.id }
+                },
+                limit: 1
             });
+
+            const orders = (result as any).cursor?.firstBatch || [];
             
-            if (!order) {
+            if (orders.length === 0) {
                 set.status = 404;
                 return { message: "Pedido não encontrado" };
             }
+
+            const order = orders[0];
             
             if (!order.whatsappMessage) {
                 set.status = 400;
@@ -284,19 +371,37 @@ export class OrdersController {
      */
     static async getOrderByNumber(params: any, set: any) {
         try {
-            const order = await prisma.order.findUnique({
-                where: { orderNumber: params.orderNumber }
+            // Usar raw command para buscar pedido por número
+            const result = await prisma.$runCommandRaw({
+                find: "orders",
+                filter: { 
+                    orderNumber: params.orderNumber
+                },
+                limit: 1
             });
+
+            const orders = (result as any).cursor?.firstBatch || [];
             
-            if (!order) {
+            if (orders.length === 0) {
                 set.status = 404;
                 return { message: "Pedido não encontrado" };
             }
+
+            const order = orders[0];
             
             return { 
                 order: {
-                    ...order,
-                    items: JSON.parse(order.items)
+                    id: order._id?.$oid || order._id?.toString() || String(order._id),
+                    orderNumber: order.orderNumber,
+                    customerName: order.customerName,
+                    customerPhone: order.customerPhone,
+                    items: JSON.parse(order.items),
+                    total: order.total,
+                    status: order.status,
+                    whatsappMessage: order.whatsappMessage,
+                    whatsappLink: order.whatsappLink,
+                    createdAt: order.createdAt,
+                    updatedAt: order.updatedAt
                 }
             };
         } catch (error) {
