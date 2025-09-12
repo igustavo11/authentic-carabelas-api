@@ -10,6 +10,7 @@ export const productResponseSchema = t.Object({
     category: t.String(),
     sizes: t.Array(t.String()),
     stock: t.Number(),
+    isOutOfStock: t.Boolean(),
     createdAt: t.Optional(t.Date()),
     updatedAt: t.Optional(t.Date())
 });
@@ -38,7 +39,8 @@ export const createProductSchema = {
         images: t.Optional(t.Union([t.Array(t.File()), t.File()], { description: "Product images to upload" })),
         category: t.String({ description: "Product category" }),
         sizes: t.Optional(t.Union([t.Array(t.String()), t.String()], { description: "Available sizes (P, M, G, GG)" })),
-        stock: t.Union([t.Number(), t.String()], { description: "Stock quantity" })
+        stock: t.Union([t.Number(), t.String()], { description: "Stock quantity" }),
+        isOutOfStock: t.Optional(t.Boolean({ description: "Mark product as out of stock" }))
     }),
     response: {
         201: t.Object({
@@ -64,6 +66,26 @@ export const updateProductSchema = {
         imagesToDelete: t.Optional(t.Array(t.String(), { description: "Public IDs of images to delete" })),
         category: t.Optional(t.String()),
         sizes: t.Optional(t.Union([t.Array(t.String()), t.String()])),
-        stock: t.Optional(t.Union([t.Number(), t.String()]))
+        stock: t.Optional(t.Union([t.Number(), t.String()])),
+        isOutOfStock: t.Optional(t.Boolean({ description: "Mark product as out of stock" }))
     })
+};
+
+export const toggleOutOfStockSchema = {
+    params: t.Object({ id: t.String() }),
+    response: {
+        200: t.Object({
+            product: productResponseSchema,
+            message: t.String()
+        }),
+        401: t.Object({
+            message: t.String()
+        }),
+        404: t.Object({
+            message: t.String()
+        }),
+        500: t.Object({
+            message: t.String()
+        })
+    }
 };

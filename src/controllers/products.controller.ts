@@ -38,6 +38,7 @@ export class ProductsController {
                 category: product.category,
                 sizes: product.sizes || [],
                 stock: product.stock,
+                isOutOfStock: product.isOutOfStock || false,
                 createdAt: product.createdAt,
                 updatedAt: product.updatedAt
             }));
@@ -81,6 +82,7 @@ export class ProductsController {
                 category: product.category,
                 sizes: product.sizes || [],
                 stock: product.stock,
+                isOutOfStock: product.isOutOfStock || false,
                 createdAt: product.createdAt,
                 updatedAt: product.updatedAt
             };
@@ -119,6 +121,7 @@ export class ProductsController {
                 category: product.category,
                 sizes: product.sizes || [],
                 stock: product.stock,
+                isOutOfStock: product.isOutOfStock || false,
                 createdAt: product.createdAt,
                 updatedAt: product.updatedAt
             }));
@@ -184,6 +187,7 @@ export class ProductsController {
                     category: body.category,
                     sizes: sizes || [],
                     stock: stock,
+                    isOutOfStock: body.isOutOfStock || false,
                     createdAt: new Date(),
                     updatedAt: new Date()
                 }]
@@ -237,6 +241,7 @@ export class ProductsController {
                     category: product.category,
                     sizes: product.sizes,
                     stock: product.stock,
+                    isOutOfStock: product.isOutOfStock || false,
                     createdAt: product.createdAt,
                     updatedAt: product.updatedAt
                 }
@@ -310,15 +315,58 @@ export class ProductsController {
                 ...(body.category !== undefined ? { category: body.category } : {}),
                 ...(sizes !== undefined ? { sizes: sizes } : {}),
                 ...(stock !== undefined ? { stock: stock } : {}),
+                ...(body.isOutOfStock !== undefined ? { isOutOfStock: body.isOutOfStock } : {}),
                 ...(imageUrls.length > 0 ? { images: imageUrls } : {}),
                 updatedAt: new Date()
             };
 
-            const product = await prisma.product.update({
-                where: { id: params.id },
-                data: updateData
+            // Atualizar produto usando raw command do MongoDB
+            const updateResult = await prisma.$runCommandRaw({
+                update: "products",
+                updates: [{
+                    q: { _id: { $oid: params.id } },
+                    u: { $set: updateData }
+                }]
             });
-            return { product };
+
+            if (!updateResult.ok || updateResult.n === 0) {
+                set.status = 404;
+                return { message: "Product not found" };
+            }
+
+            // Buscar o produto atualizado
+            const productResult = await prisma.$runCommandRaw({
+                find: "products",
+                filter: { _id: { $oid: params.id } },
+                limit: 1
+            });
+
+            const products = (productResult as any).cursor?.firstBatch || [];
+            
+            if (products.length === 0) {
+                set.status = 404;
+                return { message: "Product not found" };
+            }
+
+            const product = products[0];
+            
+            // Formatar produto
+            const formattedProduct = {
+                id: product._id?.$oid || product._id?.toString() || String(product._id),
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                imageUrl: product.imageUrl,
+                images: product.images || [],
+                category: product.category,
+                sizes: product.sizes || [],
+                stock: product.stock,
+                isOutOfStock: product.isOutOfStock || false,
+                createdAt: product.createdAt,
+                updatedAt: product.updatedAt
+            };
+
+            return { product: formattedProduct };
         } catch (error) {
             console.error('Erro ao atualizar produto:', error);
             set.status = 404;
@@ -333,12 +381,21 @@ export class ProductsController {
             return { message: "Unauthorized" };
         }
         try {
-            // Buscar o produto primeiro para obter as imagens
-            const product = await prisma.product.findUnique({ where: { id: params.id } });
-            if (!product) {
+            // Buscar o produto primeiro para obter as imagens usando raw command
+            const productResult = await prisma.$runCommandRaw({
+                find: "products",
+                filter: { _id: { $oid: params.id } },
+                limit: 1
+            });
+
+            const products = (productResult as any).cursor?.firstBatch || [];
+            
+            if (products.length === 0) {
                 set.status = 404;
                 return { message: "Product not found" };
             }
+
+            const product = products[0];
 
             // Deletar imagens do Cloudinary se existirem
             if (product.images && product.images.length > 0) {
@@ -358,13 +415,110 @@ export class ProductsController {
                 }
             }
 
-            // Deletar o produto do banco de dados
-            await prisma.product.delete({ where: { id: params.id } });
+            // Deletar o produto do banco de dados usando raw command
+            const deleteResult = await prisma.$runCommandRaw({
+                delete: "products",
+                deletes: [{
+                    q: { _id: { $oid: params.id } },
+                    limit: 1
+                }]
+            });
+
+            if (!deleteResult.ok || deleteResult.n === 0) {
+                set.status = 404;
+                return { message: "Product not found" };
+            }
+
             return { success: true };
         } catch (error) {
             console.error('Erro ao deletar produto:', error);
             set.status = 404;
             return { message: "Product not found or delete failed" };
+        }
+    }
+
+    static async toggleOutOfStock(params: any, jwt: any, headers: any, set: any) {
+        const user = await authService.verifyToken(headers.authorization, jwt);
+        if (!user) {
+            set.status = 401;
+            return { message: "Unauthorized" };
+        }
+        try {
+            // Buscar o produto atual para obter o status atual
+            const productResult = await prisma.$runCommandRaw({
+                find: "products",
+                filter: { _id: { $oid: params.id } },
+                limit: 1
+            });
+
+            const products = (productResult as any).cursor?.firstBatch || [];
+            
+            if (products.length === 0) {
+                set.status = 404;
+                return { message: "Product not found" };
+            }
+
+            const product = products[0];
+            const currentOutOfStock = product.isOutOfStock || false;
+            const newOutOfStock = !currentOutOfStock;
+
+            // Atualizar o status de esgotado
+            const updateResult = await prisma.$runCommandRaw({
+                update: "products",
+                updates: [{
+                    q: { _id: { $oid: params.id } },
+                    u: { 
+                        $set: { 
+                            isOutOfStock: newOutOfStock,
+                            updatedAt: new Date()
+                        }
+                    }
+                }]
+            });
+
+            if (!updateResult.ok || updateResult.n === 0) {
+                set.status = 404;
+                return { message: "Product not found" };
+            }
+
+            // Buscar o produto atualizado
+            const updatedProductResult = await prisma.$runCommandRaw({
+                find: "products",
+                filter: { _id: { $oid: params.id } },
+                limit: 1
+            });
+
+            const updatedProducts = (updatedProductResult as any).cursor?.firstBatch || [];
+            const updatedProduct = updatedProducts[0];
+            
+            // Formatar produto
+            const formattedProduct = {
+                id: updatedProduct._id?.$oid || updatedProduct._id?.toString() || String(updatedProduct._id),
+                name: updatedProduct.name,
+                price: updatedProduct.price,
+                description: updatedProduct.description,
+                imageUrl: updatedProduct.imageUrl,
+                images: updatedProduct.images || [],
+                category: updatedProduct.category,
+                sizes: updatedProduct.sizes || [],
+                stock: updatedProduct.stock,
+                isOutOfStock: updatedProduct.isOutOfStock || false,
+                createdAt: updatedProduct.createdAt,
+                updatedAt: updatedProduct.updatedAt
+            };
+
+            const message = newOutOfStock ? 
+                "Produto marcado como esgotado" : 
+                "Produto marcado como disponível";
+
+            return { 
+                product: formattedProduct,
+                message: message
+            };
+        } catch (error) {
+            console.error('Erro ao alterar status de esgotado do produto:', error);
+            set.status = 500;
+            return { message: "Failed to toggle out of stock status" };
         }
     }
 }

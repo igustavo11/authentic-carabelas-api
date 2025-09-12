@@ -37,6 +37,12 @@ export class InventoryService {
 
                     const product = products[0];
 
+                    // Verificar se o produto está marcado como esgotado
+                    if (product.isOutOfStock) {
+                        errors.push(`Produto ${item.productName} está marcado como esgotado`);
+                        continue;
+                    }
+
                     // Verificar se há estoque suficiente
                     if (product.stock < item.quantity) {
                         errors.push(`Estoque insuficiente para ${item.productName}. Disponível: ${product.stock}, Solicitado: ${item.quantity}`);
@@ -166,6 +172,12 @@ export class InventoryService {
                     }
 
                     const product = products[0];
+
+                    // Verificar se o produto está marcado como esgotado
+                    if (product.isOutOfStock) {
+                        errors.push(`Produto ${item.productName} está marcado como esgotado`);
+                        continue;
+                    }
 
                     if (product.stock < item.quantity) {
                         errors.push(`Estoque insuficiente para ${item.productName}. Disponível: ${product.stock}, Solicitado: ${item.quantity}`);

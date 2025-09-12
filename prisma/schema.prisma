@@ -28,6 +28,7 @@ model Product{
   category String
   sizes String[]
   stock Int
+  isOutOfStock Boolean @default(false) // Campo para marcar produto como esgotado
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
