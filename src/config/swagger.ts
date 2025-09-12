@@ -10,7 +10,9 @@ export const swaggerConfig = swagger({
         tags: [
             { name: "Auth", description: "Authentication endpoints" },
             { name: "Products", description: "Public products endpoints" },
-            { name: "Admin", description: "Admin protected endpoints" }
+            { name: "Orders", description: "Order management endpoints" },
+            { name: "Admin", description: "Admin protected endpoints" },
+            { name: "Upload", description: "File upload endpoints" }
         ]
     },
     path: "/docs"

@@ -17,8 +17,9 @@ services:
     ports:
       - "3335:3335"
     environment:
-      - DATABASE_URL=mongodb://admin:secret@mongo:27017/ecommerce?authSource=admin&directConnection=true&serverSelectionTimeoutMS=2000
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
+      - WHATSAPP_ADM=${WHATSAPP_ADM}
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}

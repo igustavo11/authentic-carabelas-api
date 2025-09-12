@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { authPlugin } from "../utils/auth";
 import { ProductsController } from "../controllers/products.controller";
-import { listProductsSchema, createProductSchema, updateProductSchema } from "../schemas/products.schemas";
+import { listProductsSchema, createProductSchema, updateProductSchema, toggleOutOfStockSchema } from "../schemas/products.schemas";
 
 export const productsRoutes = (app: Elysia) =>
     app
@@ -60,6 +60,18 @@ export const productsRoutes = (app: Elysia) =>
         {
             params: t.Object({ id: t.String() }),
             detail: { tags: ["Admin", "Products"], summary: "Delete product" }
+        }
+    )
+    // Admin: toggle out of stock status
+    .patch("/admin/products/:id/toggle-out-of-stock", 
+        ({ params, jwt, headers, set }) => ProductsController.toggleOutOfStock(params, jwt, headers, set), 
+        {
+            ...toggleOutOfStockSchema,
+            detail: { 
+                tags: ["Admin", "Products"], 
+                summary: "Toggle product out of stock status",
+                description: "Toggle the out of stock status of a product (Admin only)"
+            }
         }
     );
 
