@@ -6,17 +6,30 @@ import { productsRoutes } from "./routes/products";
 import { uploadRoutes } from "./routes/upload";
 import { ordersRoutes } from "./routes/oders";
 
+// Configuração de porta
+const port = process.env.PORT || 3335;
+const isDev = process.env.NODE_ENV !== 'production';
 
+// Configuração CORS - URLs permitidas
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
 
 const app = new Elysia()
 .use(cors({
-  origin: ["http://localhost:8080"],
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }))
 .use(swaggerConfig)
-.get("/", () => "Hello World")
+.get("/", () => ({ 
+  message: "E-commerce API", 
+  version: "1.0.0",
+  environment: process.env.NODE_ENV || 'development'
+}))
+.get("/health", () => ({ 
+  status: "ok", 
+  timestamp: new Date().toISOString()
+}))
 .get("/user/:id", ({ params }) => `User ID: ${params.id}`)
 .get("/login", ({body}) => {
     return {message: "Login Successful", body}
@@ -25,7 +38,14 @@ const app = new Elysia()
 .use(productsRoutes)
 .use(uploadRoutes)
 .use(ordersRoutes)
-.listen(3335);
+.listen(port);
 
-console.log("Server running at http://localhost:3335");
-console.log("Docs running at http://localhost:3335/docs");
+console.log(`🚀 Server running on port ${port}`);
+console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+
+if (isDev) {
+  console.log(`📚 API Docs: http://localhost:${port}/docs`);
+  console.log(`🌐 API Base: http://localhost:${port}`);
+} else {
+  console.log(`✅ Production server started successfully`);
+}
